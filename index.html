@@ -8,15 +8,685 @@
     <title>Agricultural Price Prediction</title>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
+            margin: 0;
             font-family: Arial, sans-serif;
             background: #f4f7f4;
-            margin: 0;
-            padding: 0;
+            color: #333;
         }
 
         header {
             background: #2e7d32;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 32px;
+        }
+
+        header p {
+            margin-top: 10px;
+        }
+
+        .container {
+            width: 92%;
+            max-width: 1100px;
+            margin: 30px auto;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-shadow: 0 3px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .card h2 {
+            color: #2e7d32;
+            margin-top: 0;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 15px;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 18px;
+            background: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1b5e20;
+        }
+
+        .result {
+            display: none;
+            margin-top: 20px;
+            padding: 18px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            border-left: 5px solid #2e7d32;
+        }
+
+        .price {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+
+        .info {
+            line-height: 1.8;
+        }
+
+        .metric {
+            background: #f1f8f2;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+
+        .chat-box {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 15px;
+            background: #fafafa;
+            border-radius: 8px;
+        }
+
+        .user-message {
+            background: #dcedc8;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 8px;
+            text-align: right;
+        }
+
+        .bot-message {
+            background: #e3f2fd;
+            padding: 10px;
+            margin: 8px 0;
+            border-radius: 8px;
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+        }
+
+        .chat-input button {
+            width: 120px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 25px;
+            background: #2e7d32;
+            color: white;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 700px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+
+    <h1>🌾 Agricultural Price Prediction</h1>
+
+    <p>
+        Machine Learning Based Agricultural Commodity Price Forecasting System
+    </p>
+
+</header>
+
+
+<div class="container">
+
+    <!-- Prediction + Historical Information -->
+
+    <div class="grid">
+
+        <!-- Prediction -->
+
+        <div class="card">
+
+            <h2>🔮 Price Prediction</h2>
+
+            <label>Market</label>
+
+            <select id="market">
+
+                <option value="Udumalpet">
+                    Udumalpet
+                </option>
+
+                <option value="Tiruchengode">
+                    Tiruchengode
+                </option>
+
+                <option value="Palani(Uzhavar Sandhai )">
+                    Palani
+                </option>
+
+                <option value="Namakkal(Uzhavar Sandhai )">
+                    Namakkal
+                </option>
+
+                <option value="Rasipuram(Uzhavar Sandhai )">
+                    Rasipuram
+                </option>
+
+                <option value="Ambattur(Uzhavar Sandhai )">
+                    Ambattur
+                </option>
+
+                <option value="Perambalur(Uzhavar Sandhai )">
+                    Perambalur
+                </option>
+
+            </select>
+
+
+            <label>Date</label>
+
+            <input type="date" id="date">
+
+
+            <button onclick="predictPrice()">
+
+                🔮 Predict Price
+
+            </button>
+
+
+            <div id="predictionResult" class="result">
+
+            </div>
+
+        </div>
+
+
+        <!-- Historical Information -->
+
+        <div class="card">
+
+            <h2>📊 Historical Price Information</h2>
+
+            <div class="info">
+
+                <p>
+                    <b>Commodity:</b> Chili Red
+                </p>
+
+                <p>
+                    <b>Markets:</b> 18
+                </p>
+
+                <p>
+                    <b>Districts:</b> 11
+                </p>
+
+                <p>
+                    <b>Price Type:</b> Modal Price
+                </p>
+
+                <p>
+                    <b>Dataset:</b> Historical Agricultural Market Data
+                </p>
+
+                <p>
+                    Historical market prices are used to identify
+                    price patterns and support prediction.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- Model Performance -->
+
+    <div class="card">
+
+        <h2>🤖 Machine Learning Model</h2>
+
+        <div class="grid">
+
+            <div class="metric">
+
+                <b>Model</b>
+
+                <p>Random Forest Regression</p>
+
+            </div>
+
+            <div class="metric">
+
+                <b>Prediction Target</b>
+
+                <p>Modal Price</p>
+
+            </div>
+
+            <div class="metric">
+
+                <b>Evaluation Metrics</b>
+
+                <p>MAE, MSE, RMSE, R²</p>
+
+            </div>
+
+            <div class="metric">
+
+                <b>Features</b>
+
+                <p>
+                    Historical price, seasonal and market information
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- RAG Chatbot -->
+
+    <div class="card">
+
+        <h2>🤖 Agricultural Price Chatbot</h2>
+
+        <p>
+            Ask questions about agricultural prices and markets.
+        </p>
+
+
+        <div id="chatBox" class="chat-box">
+
+            <div class="bot-message">
+
+                Hello! 👋 I can help you with agricultural price information.
+
+                <br><br>
+
+                Try asking:
+
+                <br>
+
+                • What is the highest price?
+
+                <br>
+
+                • What is the lowest price?
+
+                <br>
+
+                • What is the average price?
+
+                <br>
+
+                • What is the price in Udumalpet?
+
+            </div>
+
+        </div>
+
+
+        <div class="chat-input">
+
+            <input
+                type="text"
+                id="chatInput"
+                placeholder="Ask about agricultural prices..."
+            >
+
+            <button onclick="sendMessage()">
+                Send
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <!-- Project Information -->
+
+    <div class="card">
+
+        <h2>ℹ️ About the Project</h2>
+
+        <div class="info">
+
+            <p>
+                This project predicts agricultural commodity prices
+                using machine learning techniques.
+            </p>
+
+            <p>
+                Historical market information is used to understand
+                price patterns.
+            </p>
+
+            <p>
+                A chatbot is included to provide price information
+                through a simple conversation.
+            </p>
+
+            <p>
+                The system is designed as a web-based application
+                for easy access to agricultural price information.
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<footer>
+
+    M.Sc. Data Analytics Project |
+    Agricultural Price Prediction
+
+</footer>
+
+
+<script>
+
+/* =========================
+   PRICE PREDICTION
+========================= */
+
+function predictPrice() {
+
+    const market =
+        document.getElementById("market").value;
+
+    const date =
+        document.getElementById("date").value;
+
+    const result =
+        document.getElementById("predictionResult");
+
+
+    if (!date) {
+
+        result.style.display = "block";
+
+        result.innerHTML =
+            "⚠️ Please select a date.";
+
+        return;
+    }
+
+
+    result.style.display = "block";
+
+    result.innerHTML =
+        "⏳ Predicting price...";
+
+
+    fetch("/predict", {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+
+            market: market,
+            date: date
+
+        })
+
+    })
+
+    .then(response => {
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Prediction request failed"
+            );
+
+        }
+
+        return response.json();
+
+    })
+
+    .then(data => {
+
+        result.innerHTML = `
+
+            <h3>🔮 Prediction Result</h3>
+
+            <p>
+                <b>Market:</b>
+                ${data.market}
+            </p>
+
+            <p>
+                <b>Date:</b>
+                ${data.date}
+            </p>
+
+            <p class="price">
+                ₹${data.predicted_price}
+            </p>
+
+            <p>
+                Predicted Modal Price
+            </p>
+
+        `;
+
+    })
+
+    .catch(error => {
+
+        console.error(error);
+
+        result.innerHTML = `
+
+            <b>❌ Error while predicting price.</b>
+
+            <p>
+                Please check the Flask backend.
+            </p>
+
+        `;
+
+    });
+
+}
+
+
+/* =========================
+   CHATBOT
+========================= */
+
+function sendMessage() {
+
+    const input =
+        document.getElementById("chatInput");
+
+    const chatBox =
+        document.getElementById("chatBox");
+
+    const message =
+        input.value.trim();
+
+
+    if (message === "") {
+
+        return;
+
+    }
+
+
+    chatBox.innerHTML += `
+
+        <div class="user-message">
+
+            ${message}
+
+        </div>
+
+    `;
+
+
+    const query =
+        message.toLowerCase();
+
+
+    let response =
+        "Sorry, I could not find the requested information.";
+
+
+    if (
+        query.includes("highest") ||
+        query.includes("maximum")
+    ) {
+
+        response =
+            "📈 You can use the RAG price information to identify the highest modal price from the historical dataset.";
+
+    }
+
+    else if (
+        query.includes("lowest") ||
+        query.includes("minimum")
+    ) {
+
+        response =
+            "📉 You can use the RAG price information to identify the lowest modal price from the historical dataset.";
+
+    }
+
+    else if (
+        query.includes("average") ||
+        query.includes("mean")
+    ) {
+
+        response =
+            "📊 The chatbot can provide the average modal price from the historical agricultural price data.";
+
+    }
+
+    else if (
+        query.includes("udumalpet")
+    ) {
+
+        response =
+            "📍 Udumalpet is one of the markets available in the agricultural price dataset.";
+
+    }
+
+    else {
+
+        response =
+            "Try asking: What is the highest price? What is the lowest price? What is the average price? What is the price in Udumalpet?";
+
+    }
+
+
+    setTimeout(function() {
+
+        chatBox.innerHTML += `
+
+            <div class="bot-message">
+
+                ${response}
+
+            </div>
+
+        `;
+
+        chatBox.scrollTop =
+            chatBox.scrollHeight;
+
+    }, 500);
+
+
+    input.value = "";
+
+}
+
+
+/* Press Enter to send chatbot message */
+
+document
+    .getElementById("chatInput")
+    .addEventListener(
+        "keypress",
+        function(event) {
+
+            if (event.key === "Enter") {
+
+                sendMessage();
+
+            }
+
+        }
+    );
+
+</script>
+
+</body>
+
+</html>
             color: white;
             padding: 25px;
             text-align: center;
