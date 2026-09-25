@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Agricultural Price Prediction</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f7f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #2e7d32;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 900px;
+            margin: 30px auto;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            color: #2e7d32;
+        }
+
+        label {
+            display: block;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        select,
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 13px;
+            background: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1b5e20;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f5e9;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .info {
+            line-height: 1.8;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>🌾 Agricultural Price Prediction</h1>
+    <p>Machine Learning Based Commodity Price Forecasting System</p>
+</header>
+
+<div class="container">
+
+    <!-- Prediction Section -->
+    <div class="card">
+
+        <h2>🔮 Predict Agricultural Price</h2>
+
+        <label for="market">Select Market</label>
+
+        <select id="market">
+
+            <option value="Udumalpet">Udumalpet</option>
+            <option value="Tiruchengode">Tiruchengode</option>
+            <option value="Chidambaram(Uzhavar Sandhai )">
+                Chidambaram
+            </option>
+            <option value="Palani(Uzhavar Sandhai )">
+                Palani
+            </option>
+            <option value="Namakkal(Uzhavar Sandhai )">
+                Namakkal
+            </option>
+            <option value="Rasipuram(Uzhavar Sandhai )">
+                Rasipuram
+            </option>
+            <option value="Ambattur(Uzhavar Sandhai )">
+                Ambattur
+            </option>
+            <option value="Perambalur(Uzhavar Sandhai )">
+                Perambalur
+            </option>
+
+        </select>
+
+        <label for="date">Select Date</label>
+
+        <input type="date" id="date">
+
+        <button onclick="predictPrice()">
+            Predict Price
+        </button>
+
+        <div id="result"></div>
+
+    </div>
+
+
+    <!-- Project Information -->
+    <div class="card">
+
+        <h2>📊 About the System</h2>
+
+        <div class="info">
+
+            <p>
+                This system predicts agricultural commodity prices
+                using historical market data and machine learning.
+            </p>
+
+            <p>
+                <b>Commodity:</b> Chili Red
+            </p>
+
+            <p>
+                <b>Prediction Model:</b> Random Forest Regression
+            </p>
+
+            <p>
+                <b>Input:</b> Market and Date
+            </p>
+
+            <p>
+                <b>Output:</b> Predicted Modal Price
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<footer>
+
+    Agricultural Price Prediction Project | M.Sc. Data Analytics
+
+</footer>
+
+
+<script>
+
+function predictPrice() {
+
+    const market = document.getElementById("market").value;
+    const date = document.getElementById("date").value;
+
+    if (!date) {
+
+        alert("Please select a date.");
+
+        return;
+    }
+
+    fetch("/predict", {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+
+            market: market,
+            date: date
+
+        })
+
+    })
+
+    .then(response => response.json())
+
+    .then(data => {
+
+        const result = document.getElementById("result");
+
+        result.style.display = "block";
+
+        result.innerHTML = `
+            <h3>🔮 Prediction Result</h3>
+
+            <p>
+                <b>Market:</b> ${data.market}
+            </p>
+
+            <p>
+                <b>Date:</b> ${data.date}
+            </p>
+
+            <p>
+                <b>Predicted Modal Price:</b>
+                ₹${data.predicted_price}
+            </p>
+        `;
+
+    })
+
+    .catch(error => {
+
+        console.error(error);
+
+        alert("Error while predicting price.");
+
+    });
+
+}
+
+</script>
+
+</body>
+
+</html>
