@@ -1,548 +1,314 @@
 from flask import Flask, render_template, request, jsonify
 import pandas as pd
-import numpy as np
 import joblib
 import os
-import re
-
-
-# ============================================================
-# FLASK APPLICATION
-# ============================================================
 
 app = Flask(__name__)
 
-
-# ============================================================
-# FILE PATHS
-# ============================================================
-
-MODEL_FILE = "agricultural_price_model.pkl"
-FEATURE_FILE = "model_features.pkl"
-RAG_FILE = "agricultural_price_knowledge.csv"
-
-
-# ============================================================
-# LOAD MODEL, FEATURES AND RAG DATA
-# ============================================================
+# =========================================================
+# LOAD MODEL, FEATURES AND DATA
+# =========================================================
 
 try:
-    model = joblib.load(MODEL_FILE)
-    final_features = joblib.load(FEATURE_FILE)
+    model = joblib.load("agricultural_price_model.pkl")
+    final_features = joblib.load("model_features.pkl")
+    rag_data = pd.read_csv("agricultural_price_knowledge.csv")
 
-    rag_data = pd.read_csv(RAG_FILE)
-
-    print("Model loaded successfully")
-    print("Feature file loaded successfully")
-    print("RAG data loaded successfully")
+    print("✅ Model loaded successfully")
+    print("✅ Features loaded successfully")
+    print("✅ Dataset loaded successfully")
+    print("Dataset shape:", rag_data.shape)
+    print("Model features:", final_features)
 
 except Exception as e:
-    print("Error while loading project files:")
-    print(e)
-
+    print("❌ ERROR WHILE LOADING FILES:", repr(e))
     model = None
-    final_features = None
+    final_features = []
     rag_data = pd.DataFrame()
 
 
-# ============================================================
-# DATA PREPARATION
-# ============================================================
+# =========================================================
+# FIND MARKET COLUMN
+# =========================================================
 
-if not rag_data.empty:
+def get_market_column():
 
-    # Convert date column
-    if "date" in rag_data.columns:
-        rag_data["date"] = pd.to_datetime(
-            rag_data["date"],
+    possible_columns = [
+        "market",
+        "Market",
+        "market_name",
+        "Market Name",
+        "Market_Name"
+    ]
+
+    for col in possible_columns:
+        if col in rag_data.columns:
+            return col
+
+    return None
+
+
+# =========================================================
+# FIND DATE COLUMN
+# =========================================================
+
+def get_date_column():
+
+    possible_columns = [
+        "date",
+        "Date",
+        "arrival_date",
+        "Arrival Date",
+        "arrival_date"
+    ]
+
+    for col in possible_columns:
+        if col in rag_data.columns:
+            return col
+
+    return None
+
+
+# =========================================================
+# PRICE PREDICTION FUNCTION
+# =========================================================
+
+def predict_price(market, date):
+
+    if model is None:
+        raise Exception("Model could not be loaded.")
+
+    if rag_data.empty:
+        raise Exception("Agricultural price dataset is empty.")
+
+    # Convert date
+    selected_date = pd.to_datetime(date)
+
+    market_column = get_market_column()
+    date_column = get_date_column()
+
+    # -----------------------------------------------------
+    # FILTER MARKET DATA
+    # -----------------------------------------------------
+
+    market_data = rag_data.copy()
+
+    if market_column is not None:
+
+        matching_data = market_data[
+            market_data[market_column].astype(str).str.strip().str.lower()
+            == str(market).strip().lower()
+        ]
+
+        if len(matching_data) > 0:
+            market_data = matching_data
+
+        else:
+            print("⚠️ Market not found exactly:", market)
+            print("Using complete dataset for prediction.")
+
+    # -----------------------------------------------------
+    # SORT BY DATE
+    # -----------------------------------------------------
+
+    if date_column is not None:
+
+        market_data[date_column] = pd.to_datetime(
+            market_data[date_column],
             errors="coerce"
         )
 
-    elif "t" in rag_data.columns:
-        rag_data["date"] = pd.to_datetime(
-            rag_data["t"],
-            errors="coerce"
+        market_data = market_data.sort_values(
+            by=date_column
         )
 
-    # Convert price columns to numeric
-    for column in ["p_min", "p_max", "p_modal"]:
+    # -----------------------------------------------------
+    # CHECK REQUIRED PRICE COLUMNS
+    # -----------------------------------------------------
 
-        if column in rag_data.columns:
-
-            rag_data[column] = pd.to_numeric(
-                rag_data[column],
-                errors="coerce"
-            )
-
-    # Remove invalid rows
     required_columns = [
         "p_min",
         "p_max",
         "p_modal"
     ]
 
-    rag_data = rag_data.dropna(
-        subset=[
-            column for column in required_columns
-            if column in rag_data.columns
-        ]
-    )
+    for col in required_columns:
 
+        if col not in market_data.columns:
+            raise Exception(
+                f"Required column '{col}' not found in dataset."
+            )
 
-# ============================================================
-# PREDICTION FUNCTION
-# ============================================================
+    # -----------------------------------------------------
+    # LAG VALUES
+    # -----------------------------------------------------
 
-def predict_price(market, date):
+    if len(market_data) >= 3:
 
-    if model is None:
-        raise Exception("ML model could not be loaded.")
+        lag_1 = float(market_data["p_modal"].iloc[-1])
+        lag_2 = float(market_data["p_modal"].iloc[-2])
+        lag_3 = float(market_data["p_modal"].iloc[-3])
 
-    if rag_data.empty:
-        raise Exception("RAG dataset is empty.")
+    else:
 
-    date = pd.to_datetime(date)
+        # fallback to complete dataset
 
-    # --------------------------------------------------------
-    # Calculate input features
-    # --------------------------------------------------------
+        lag_1 = float(rag_data["p_modal"].iloc[-1])
+        lag_2 = float(rag_data["p_modal"].iloc[-2])
+        lag_3 = float(rag_data["p_modal"].iloc[-3])
+
+    # -----------------------------------------------------
+    # CREATE INPUT DATA
+    # -----------------------------------------------------
 
     input_data = pd.DataFrame({
 
         "p_min": [
-            rag_data["p_min"].mean()
+            float(market_data["p_min"].mean())
         ],
 
         "year": [
-            date.year
+            selected_date.year
         ],
 
         "month": [
-            date.month
+            selected_date.month
         ],
 
         "day": [
-            date.day
+            selected_date.day
         ],
 
         "day_of_week": [
-            date.dayofweek
+            selected_date.dayofweek
         ],
 
         "week_of_year": [
-            date.isocalendar().week
+            selected_date.isocalendar().week
         ],
 
         "is_weekend": [
-            1 if date.dayofweek >= 5 else 0
+            1 if selected_date.dayofweek >= 5 else 0
         ],
 
         "quarter": [
-            date.quarter
+            selected_date.quarter
         ],
 
         "price_range": [
-            rag_data["p_max"].mean()
-            -
-            rag_data["p_min"].mean()
+            float(
+                market_data["p_max"].mean()
+                - market_data["p_min"].mean()
+            )
         ],
 
         "price_average": [
-            (
-                rag_data["p_min"].mean()
-                +
-                rag_data["p_max"].mean()
-            ) / 2
+            float(
+                (
+                    market_data["p_min"].mean()
+                    + market_data["p_max"].mean()
+                ) / 2
+            )
         ],
 
         "lag_1": [
-            rag_data["p_modal"].iloc[-1]
+            lag_1
         ],
 
         "lag_2": [
-            rag_data["p_modal"].iloc[-2]
+            lag_2
         ],
 
         "lag_3": [
-            rag_data["p_modal"].iloc[-3]
+            lag_3
         ]
     })
 
-    # --------------------------------------------------------
-    # Match training features
-    # --------------------------------------------------------
+    # -----------------------------------------------------
+    # ADD MARKET
+    # -----------------------------------------------------
+
+    if market_column is not None:
+        input_data[market_column] = market
+
+    # -----------------------------------------------------
+    # CONVERT CATEGORICAL DATA
+    # -----------------------------------------------------
 
     input_data = pd.get_dummies(input_data)
+
+    # -----------------------------------------------------
+    # MATCH MODEL TRAINING FEATURES
+    # -----------------------------------------------------
 
     input_data = input_data.reindex(
         columns=final_features,
         fill_value=0
     )
 
-    # --------------------------------------------------------
-    # Prediction
-    # --------------------------------------------------------
+    print("\n==============================")
+    print("Prediction Input")
+    print("==============================")
+    print(input_data)
+    print("Input shape:", input_data.shape)
+    print("==============================")
+
+    # -----------------------------------------------------
+    # MODEL PREDICTION
+    # -----------------------------------------------------
 
     prediction = model.predict(input_data)[0]
 
     return float(prediction)
 
 
-# ============================================================
-# MARKET PRICE RETRIEVAL
-# ============================================================
-
-def get_market_price(market):
-
-    if rag_data.empty:
-        return None
-
-    market_data = rag_data[
-        rag_data["market_name"]
-        .astype(str)
-        .str.lower()
-        ==
-        str(market).lower()
-    ]
-
-    if market_data.empty:
-        return None
-
-    # Sort by date
-    market_data = market_data.sort_values(
-        "date"
-    )
-
-    # Latest available record
-    latest = market_data.iloc[-1]
-
-    return {
-
-        "market": str(
-            latest.get("market_name", "")
-        ),
-
-        "district": str(
-            latest.get("district_name", "")
-        ),
-
-        "date": str(
-            latest["date"].date()
-        ),
-
-        "variety": str(
-            latest.get("variety", "")
-        ),
-
-        "minimum_price": float(
-            latest["p_min"]
-        ),
-
-        "maximum_price": float(
-            latest["p_max"]
-        ),
-
-        "modal_price": float(
-            latest["p_modal"]
-        )
-    }
-
-
-# ============================================================
-# RAG CHATBOT
-# ============================================================
-
-def agricultural_price_chatbot(user_query):
-
-    query = user_query.lower().strip()
-
-    if rag_data.empty:
-
-        return {
-            "type": "error",
-            "message": "RAG dataset is not available."
-        }
-
-    # --------------------------------------------------------
-    # PREDICTION QUERY
-    # --------------------------------------------------------
-
-    if (
-        "predict" in query
-        or "predicted" in query
-        or "forecast" in query
-    ):
-
-        selected_market = None
-
-        # Find market mentioned by user
-        for market in rag_data[
-            "market_name"
-        ].dropna().unique():
-
-            market_name = str(market)
-
-            if market_name.lower() in query:
-
-                selected_market = market_name
-                break
-
-        if selected_market is None:
-
-            return {
-                "type": "error",
-                "message": (
-                    "Please mention a valid market name."
-                )
-            }
-
-        # Try to find date YYYY-MM-DD
-        date_match = re.search(
-            r"\d{4}-\d{2}-\d{2}",
-            query
-        )
-
-        if date_match:
-
-            prediction_date = date_match.group()
-
-        else:
-
-            prediction_date = str(
-                pd.Timestamp.today().date()
-            )
-
-        try:
-
-            predicted_price = predict_price(
-                selected_market,
-                prediction_date
-            )
-
-            return {
-
-                "type": "prediction",
-
-                "market": selected_market,
-
-                "date": prediction_date,
-
-                "predicted_price": round(
-                    predicted_price,
-                    2
-                ),
-
-                "message": (
-                    f"Predicted modal price for "
-                    f"{selected_market} on "
-                    f"{prediction_date} is "
-                    f"₹{predicted_price:.2f}"
-                )
-            }
-
-        except Exception as e:
-
-            return {
-                "type": "error",
-                "message": str(e)
-            }
-
-    # --------------------------------------------------------
-    # HIGHEST PRICE
-    # --------------------------------------------------------
-
-    if (
-        "highest" in query
-        or "maximum price" in query
-        or "max price" in query
-    ):
-
-        row = rag_data.loc[
-            rag_data["p_modal"].idxmax()
-        ]
-
-        return {
-
-            "type": "historical",
-
-            "market": str(
-                row["market_name"]
-            ),
-
-            "date": str(
-                row["date"].date()
-            ),
-
-            "price": float(
-                row["p_modal"]
-            ),
-
-            "message": (
-                f"The highest modal price is "
-                f"₹{row['p_modal']:.2f} at "
-                f"{row['market_name']}."
-            )
-        }
-
-    # --------------------------------------------------------
-    # LOWEST PRICE
-    # --------------------------------------------------------
-
-    if (
-        "lowest" in query
-        or "minimum price" in query
-        or "min price" in query
-    ):
-
-        row = rag_data.loc[
-            rag_data["p_modal"].idxmin()
-        ]
-
-        return {
-
-            "type": "historical",
-
-            "market": str(
-                row["market_name"]
-            ),
-
-            "date": str(
-                row["date"].date()
-            ),
-
-            "price": float(
-                row["p_modal"]
-            ),
-
-            "message": (
-                f"The lowest modal price is "
-                f"₹{row['p_modal']:.2f} at "
-                f"{row['market_name']}."
-            )
-        }
-
-    # --------------------------------------------------------
-    # AVERAGE PRICE
-    # --------------------------------------------------------
-
-    if (
-        "average" in query
-        or "mean price" in query
-    ):
-
-        average_price = rag_data[
-            "p_modal"
-        ].mean()
-
-        return {
-
-            "type": "average",
-
-            "price": round(
-                float(average_price),
-                2
-            ),
-
-            "message": (
-                f"The average modal price is "
-                f"₹{average_price:.2f}."
-            )
-        }
-
-    # --------------------------------------------------------
-    # MARKET-SPECIFIC QUERY
-    # --------------------------------------------------------
-
-    for market in rag_data[
-        "market_name"
-    ].dropna().unique():
-
-        market_name = str(market)
-
-        if market_name.lower() in query:
-
-            result = get_market_price(
-                market_name
-            )
-
-            if result:
-
-                return {
-
-                    "type": "market",
-
-                    **result,
-
-                    "message": (
-                        f"Latest price at "
-                        f"{result['market']} is "
-                        f"₹{result['modal_price']:.2f} "
-                        f"(modal price)."
-                    )
-                }
-
-    # --------------------------------------------------------
-    # DEFAULT RESPONSE
-    # --------------------------------------------------------
-
-    return {
-
-        "type": "help",
-
-        "message": (
-            "Sorry, I could not find the requested "
-            "information. You can ask questions such as:\n\n"
-            "• What is the price in Udumalpet?\n"
-            "• What is the highest price?\n"
-            "• What is the lowest price?\n"
-            "• What is the average price?\n"
-            "• What is the predicted price in Udumalpet?"
-        )
-    }
-
-
-# ============================================================
+# =========================================================
 # HOME PAGE
-# ============================================================
+# =========================================================
 
 @app.route("/")
 def home():
 
-    return render_template(
-        "index.html"
-    )
+    return render_template("index.html")
 
 
-# ============================================================
+# =========================================================
 # PREDICTION API
-# ============================================================
+# =========================================================
 
-@app.route(
-    "/predict",
-    methods=["POST"]
-)
+@app.route("/predict", methods=["POST"])
 def predict():
 
     try:
 
         data = request.get_json()
 
-        market = data.get(
-            "market"
-        )
-
-        date = data.get(
-            "date"
-        )
-
-        if not market or not date:
-
+        if data is None:
             return jsonify({
                 "success": False,
-                "message": (
-                    "Market and date are required."
-                )
+                "error": "No JSON data received."
             }), 400
+
+        market = data.get("market")
+        date = data.get("date")
+
+        if not market:
+            return jsonify({
+                "success": False,
+                "error": "Market is required."
+            }), 400
+
+        if not date:
+            return jsonify({
+                "success": False,
+                "error": "Date is required."
+            }), 400
+
+        print("\n================================")
+        print("PREDICTION REQUEST")
+        print("Market:", market)
+        print("Date:", date)
+        print("================================")
 
         prediction = predict_price(
             market,
@@ -561,177 +327,228 @@ def predict():
                 prediction,
                 2
             )
+
         })
 
     except Exception as e:
+
+        # IMPORTANT:
+        # This prints the REAL backend error
+
+        print("\n❌ REAL PREDICTION ERROR")
+        print(type(e).__name__)
+        print(str(e))
 
         return jsonify({
 
             "success": False,
 
-            "message": str(e)
+            "error": str(e),
+
+            "error_type": type(e).__name__
 
         }), 500
 
 
-# ============================================================
-# CHAT API
-# ============================================================
+# =========================================================
+# RAG / CHATBOT API
+# =========================================================
 
-@app.route(
-    "/chat",
-    methods=["POST"]
-)
+@app.route("/chat", methods=["POST"])
 def chat():
 
     try:
 
         data = request.get_json()
 
-        user_query = data.get(
-            "query",
+        question = data.get(
+            "question",
             ""
-        )
+        ).strip()
 
-        if not user_query:
+        if not question:
 
             return jsonify({
+                "answer": "Please enter a question."
+            })
 
-                "success": False,
+        if rag_data.empty:
 
-                "message": (
-                    "Please enter a question."
+            return jsonify({
+                "answer": "Agricultural price data is not available."
+            })
+
+        q = question.lower()
+
+        # -------------------------------------------------
+        # HIGHEST PRICE
+        # -------------------------------------------------
+
+        if "highest" in q or "maximum" in q or "max" in q:
+
+            row = rag_data.loc[
+                rag_data["p_modal"].idxmax()
+            ]
+
+            answer = (
+                f"The highest modal price in the dataset "
+                f"is ₹{float(row['p_modal']):,.2f}."
+            )
+
+        # -------------------------------------------------
+        # LOWEST PRICE
+        # -------------------------------------------------
+
+        elif "lowest" in q or "minimum" in q or "min" in q:
+
+            row = rag_data.loc[
+                rag_data["p_modal"].idxmin()
+            ]
+
+            answer = (
+                f"The lowest modal price in the dataset "
+                f"is ₹{float(row['p_modal']):,.2f}."
+            )
+
+        # -------------------------------------------------
+        # AVERAGE
+        # -------------------------------------------------
+
+        elif "average" in q or "mean" in q:
+
+            average_price = rag_data[
+                "p_modal"
+            ].mean()
+
+            answer = (
+                f"The average modal price in the dataset "
+                f"is ₹{float(average_price):,.2f}."
+            )
+
+        # -------------------------------------------------
+        # TOTAL RECORDS
+        # -------------------------------------------------
+
+        elif (
+            "how many" in q
+            or "records" in q
+            or "data" in q
+        ):
+
+            answer = (
+                f"The dataset contains "
+                f"{len(rag_data)} records."
+            )
+
+        # -------------------------------------------------
+        # MARKET INFORMATION
+        # -------------------------------------------------
+
+        elif "market" in q:
+
+            market_column = get_market_column()
+
+            if market_column:
+
+                markets = (
+                    rag_data[market_column]
+                    .dropna()
+                    .astype(str)
+                    .unique()
                 )
 
-            }), 400
+                answer = (
+                    f"The dataset contains "
+                    f"{len(markets)} different markets."
+                )
 
-        response = agricultural_price_chatbot(
-            user_query
-        )
+            else:
+
+                answer = (
+                    "Market information is not available "
+                    "in the dataset."
+                )
+
+        # -------------------------------------------------
+        # DEFAULT
+        # -------------------------------------------------
+
+        else:
+
+            answer = (
+                "I can answer questions about agricultural "
+                "prices, such as highest price, lowest price, "
+                "average price, number of records, and markets."
+            )
 
         return jsonify({
-
-            "success": True,
-
-            "response": response
-
+            "answer": answer
         })
 
     except Exception as e:
 
+        print("\n❌ CHAT ERROR")
+        print(type(e).__name__)
+        print(str(e))
+
         return jsonify({
 
-            "success": False,
-
-            "message": str(e)
+            "answer": (
+                f"Chatbot error: {str(e)}"
+            )
 
         }), 500
 
 
-# ============================================================
-# MARKET LIST API
-# ============================================================
+# =========================================================
+# HEALTH CHECK
+# =========================================================
 
-@app.route(
-    "/markets",
-    methods=["GET"]
-)
-def markets():
-
-    if rag_data.empty:
-
-        return jsonify([])
-
-    market_list = sorted(
-        rag_data[
-            "market_name"
-        ]
-        .dropna()
-        .astype(str)
-        .unique()
-        .tolist()
-    )
-
-    return jsonify(
-        market_list
-    )
-
-
-# ============================================================
-# DASHBOARD SUMMARY API
-# ============================================================
-
-@app.route(
-    "/summary",
-    methods=["GET"]
-)
-def summary():
-
-    if rag_data.empty:
-
-        return jsonify({
-
-            "success": False,
-
-            "message": "No data available."
-
-        })
+@app.route("/health")
+def health():
 
     return jsonify({
 
-        "success": True,
+        "status": "running",
 
-        "total_records": int(
-            len(rag_data)
-        ),
+        "model_loaded": model is not None,
 
-        "total_markets": int(
-            rag_data[
-                "market_name"
-            ].nunique()
-        ),
+        "dataset_loaded": not rag_data.empty,
 
-        "total_districts": int(
-            rag_data[
-                "district_name"
-            ].nunique()
-        ),
+        "dataset_rows": len(rag_data)
 
-        "average_price": round(
-            float(
-                rag_data[
-                    "p_modal"
-                ].mean()
-            ),
-            2
-        ),
-
-        "highest_price": round(
-            float(
-                rag_data[
-                    "p_modal"
-                ].max()
-            ),
-            2
-        ),
-
-        "lowest_price": round(
-            float(
-                rag_data[
-                    "p_modal"
-                ].min()
-            ),
-            2
-        )
     })
 
 
-# ============================================================
-# RUN APPLICATION
-# ============================================================
+# =========================================================
+# RUN FLASK
+# =========================================================
 
 if __name__ == "__main__":
 
+    print("\n========================================")
+    print("🌾 Agricultural Price Prediction System")
+    print("========================================")
+
+    print("Model loaded:", model is not None)
+
+    print(
+        "Dataset rows:",
+        len(rag_data)
+    )
+
+    print(
+        "Market column:",
+        get_market_column()
+    )
+
+    print(
+        "Date column:",
+        get_date_column()
+    )
+
     app.run(
+        host="0.0.0.0",
+        port=5000,
         debug=True
     )
